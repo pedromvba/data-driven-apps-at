@@ -1,5 +1,6 @@
 .env
 .venv
-*py_cache
+*pycache*
 .vscode
 drafts.ipynb
+/test*
