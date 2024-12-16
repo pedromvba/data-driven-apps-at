@@ -7,3 +7,5 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 st.write(summarizer(18245))
+
+st.write(commentator(16, 1, 18245, 'formal'))
