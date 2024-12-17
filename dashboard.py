@@ -6,12 +6,48 @@ import pandas as pd
 from statsbombpy import sb
 from dotenv import load_dotenv
 import google.generativeai as genai
-
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain.schema import AIMessage, HumanMessage
 from services.agent import load_agent
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def radar_chart(player_data, player_name, ax):
+
+    metrics = player_data['metrica'].unique()
+    values = [player_data[player_data['metrica'] == metric]['valor'].values[0] for metric in metrics]
+    
+    
+    num_vars = len(metrics)
+
+    angles = [n / float(num_vars) * 2 * 3.1416 for n in range(num_vars)]
+    values += values[:1]  # Fechando o círculo no gráfico
+    angles += angles[:1]  # Fechando o círculo no gráfico
+
+    ax.set_theta_offset(3.1416 / 2)
+    ax.set_theta_direction(-1)
+
+    ax.plot(angles, values, linewidth=1, linestyle='solid', label=player_name)
+    ax.fill(angles, values, alpha=0.3)
+    
+    ax.set_yticklabels([])
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(metrics)
+
+    ax.set_title(f'{player_name} - Radar', size=16, color='black', y=1.1)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1))
+
+
+st.write('#### Compare 2 jogadores')
+
+selected_players = st.multiselect(
+        'Selecione até 2 jogadores para comparar',
+        get_events(match_id)['player'].dropna().unique(),
+        max_selections=2
+    )
 
 
 
@@ -33,7 +69,7 @@ def memorize_message():
 
 
 
-tab1, tab2, tab3 = st.tabs(['Partidas', 'Narração', 'ChatBot'])
+tab1, tab2, tab3, tab4 = st.tabs(['Partidas', 'Narração', 'Ficha Técnica do Jogador', 'ChatBot'])
 
 
 with tab1:
@@ -56,8 +92,6 @@ with tab1:
                     ]['season_id'].iloc[0]
     st.session_state.season_id = season_id
 
-    st.write(competition_id, season_id)
-
     st.write(f"**Competição Selecionada:** {competition_name}")
     st.write(f"**Temporada Selecionada:** {season_selected}")
 
@@ -69,13 +103,6 @@ with tab1:
     st.write('#### Principais Eventos da Partida')
     st.write(summarizer(match_id))
 
-    st.write('#### Ficha Técnica do Jogador')
-
-    if player_name := st.selectbox('Jogadores', 
-                            get_events(match_id)['player'].dropna().unique()):
-        
-        melted_df = player_events(match_id, player_name).melt().rename(columns={'variable': 'metrica', 'value': 'valor'})
-        st.dataframe(melted_df, hide_index=True, width=1000)
 
 with tab2:
 
@@ -92,7 +119,57 @@ with tab2:
                 match_id=st.session_state.match_id, 
                 type=type
                 ))
+            
+
 with tab3:
+
+    st.title('Ficha Técnica do Jogador')
+
+    st.write('#### Selecione um jogador para ver os detalhes da partida')
+    if player_name := st.selectbox('Jogadores', 
+                            get_events(match_id)['player'].dropna().unique()):
+        
+        melted_df = player_events(match_id, player_name).melt().rename(columns={'variable': 'metrica', 'value': 'valor'})
+        st.dataframe(melted_df, hide_index=True, width=1000)
+
+    st.write(f'#### Estatísticas do Jogador {player_name}')
+
+    col1, col2, col3 = st.columns(3)
+
+
+    gols = melted_df[melted_df['metrica'] == 'goals']['valor'].values[0]
+    col1.metric('Gols', gols)
+
+    pct_chutes_no_alvo = (melted_df[melted_df['metrica'] == 'shots_on_target']['valor'].values[0] + gols) / \
+                                 melted_df[melted_df['metrica'] == 'shots']['valor'].values[0]
+    col2.metric('Pct. Chutes no Alvo', f"{pct_chutes_no_alvo:.2%}")
+
+
+    pct_passes_completados = melted_df[melted_df['metrica'] == 'passes_completed']['valor'].values[0] / \
+                            melted_df[melted_df['metrica'] == 'passes_attempted']['valor'].values[0]
+    col3.metric('Pct. Passes Completados', f"{pct_passes_completados:.2%}")
+
+        
+    if len(selected_players) == 2:
+            p1, p2 = st.columns(2)
+            
+            fig1, ax1 = plt.subplots(figsize=(6, 6), dpi=150, subplot_kw=dict(polar=True))
+            player_data1 = player_events(match_id, selected_players[0]).melt().rename(columns={'variable': 'metrica', 'value': 'valor'})
+            p1.dataframe(player_data1, hide_index=True, width=400)
+            radar_chart(player_data1, selected_players[0], ax1)
+            p1.pyplot(fig1)
+            
+            fig2, ax2 = plt.subplots(figsize=(6, 6), dpi=150, subplot_kw=dict(polar=True))
+            player_data2 = player_events(match_id, selected_players[1]).melt().rename(columns={'variable': 'metrica', 'value': 'valor'})
+            p2.dataframe(player_data2, hide_index=True, width=400)
+            radar_chart(player_data2, selected_players[1], ax2)
+            p2.pyplot(fig2)
+
+    else:
+        st.write("Por favor, selecione dois jogadores para comparar.")
+    
+    
+with tab4:
 
     st.title('ChatBot')
 
