@@ -41,16 +41,6 @@ def radar_chart(player_data, player_name, ax):
     ax.legend(loc='upper right', bbox_to_anchor=(1.1, 1.1))
 
 
-st.write('#### Compare 2 jogadores')
-
-selected_players = st.multiselect(
-        'Selecione até 2 jogadores para comparar',
-        get_events(match_id)['player'].dropna().unique(),
-        max_selections=2
-    )
-
-
-
 if 'match_id' not in st.session_state:
     st.session_state.match_id = None
 if 'competition_id' not in st.session_state:
@@ -149,7 +139,16 @@ with tab3:
                             melted_df[melted_df['metrica'] == 'passes_attempted']['valor'].values[0]
     col3.metric('Pct. Passes Completados', f"{pct_passes_completados:.2%}")
 
-        
+    
+
+    st.write('#### Compare 2 jogadores')
+
+    selected_players = st.multiselect(
+            'Selecione até 2 jogadores para comparar',
+            get_events(match_id)['player'].dropna().unique(),
+            max_selections=2
+    )
+
     if len(selected_players) == 2:
             p1, p2 = st.columns(2)
             
