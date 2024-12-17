@@ -65,6 +65,8 @@ def shots_on_target(match_id):
 
 def cards(match_id):
     events = get_events(match_id)
+    if 'foul_committed_card' not in events.columns:
+        return pd.DataFrame()
     game_cards = events[events['foul_committed_card'].notnull()]
     game_cards = game_cards.dropna(axis=1, how='all')
     return game_cards
@@ -109,11 +111,13 @@ def summarizer(match_id):
     game_cards: {game_cards}
     substitions: {substitions}
 
+    If you dont have any information about a specific event, you can skip it.
+
     
     """
 
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-1.5-pro")
+    model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     return response.text
 
@@ -156,6 +160,6 @@ def commentator(competition_id, season_id, match_id, type):
     """
 
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-1.5-pro")
+    model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     return response.text
