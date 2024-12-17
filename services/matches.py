@@ -3,6 +3,8 @@ import pandas as pd
 from statsbombpy import sb
 from dotenv import load_dotenv
 import google.generativeai as genai
+from langchain.tools import tool
+import json
 
 load_dotenv()
 
@@ -10,8 +12,12 @@ load_dotenv()
 def get_competitions():
     return sb.competitions()
 
-def get_match_details(competition_id, season_id):
+def get_matches(competition_id, season_id):
     return sb.matches(competition_id=competition_id, season_id=season_id)
+
+def get_match_details(competition_id, season_id, match_id):
+    details = sb.matches(competition_id=competition_id, season_id=season_id)
+    return details[details['match_id']==int(match_id)]
 
 def get_events(match_id):
     match_events = sb.events(match_id=match_id)
@@ -91,7 +97,6 @@ def summarizer(match_id):
     game_cards = convert_to_text_list(cards(match_id))
     substitions = convert_to_text_list(substitutions(match_id))
 
-
     prompt = f""""
 
     ## Context
@@ -113,7 +118,6 @@ def summarizer(match_id):
 
     If you dont have any information about a specific event, you can skip it.
 
-    
     """
 
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
@@ -121,14 +125,14 @@ def summarizer(match_id):
     response = model.generate_content(prompt)
     return response.text
 
-def commentator(competition_id, season_id, match_id, type):
+def commentator(competition_id, season_id, match_id, type=None):
 
     goals = convert_to_text_list(match_goals(match_id))
     assistencies = convert_to_text_list(match_assitencies(match_id))
     on_target_shots = convert_to_text_list(shots_on_target(match_id))
     game_cards = convert_to_text_list(cards(match_id))
     substitions = convert_to_text_list(substitutions(match_id))
-    match_details = convert_to_text_list(get_match_details(competition_id, season_id))
+    match_details = convert_to_text_list(get_match_details(competition_id, season_id, match_id))
     lineups = convert_to_text_list(starting_lineups(match_id))
 
 
@@ -163,3 +167,110 @@ def commentator(competition_id, season_id, match_id, type):
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     return response.text
+
+@tool
+def retrieve_match_details(action_input: str) -> str:
+    """
+    Get the details of a specific match 
+    
+    Args:
+        - action_input(str): The input data containing the match_id, competition_id, and season_id.
+          format: {
+              "match_id": 12345,
+              "competition_id": 123,
+              "season_id": 02
+            }
+    """
+    try:
+        input_data = json.loads(action_input)
+        competition_id = input_data["competition_id"]
+        season_id = input_data["season_id"]
+        match_id = input_data["match_id"]
+
+        match_details = get_match_details(competition_id, season_id, match_id)
+        return convert_to_text_list(match_details)
+    except Exception as e:
+        return f"Error: {str(e)}"
+    
+
+@tool
+def get_specialist_comments(action_input: str) -> str:
+    """
+    Provide an overview of the match and the match details.
+    Provide comments of a sports specialist about a specific match.
+    The specialist knows match details and lineups.
+    
+    Args:
+        - action_input(str): The input data containing the competition_id, season_id, match_id, and type.
+          format: {
+              "competition_id": 123,
+              "season_id": 02,
+              "match_id": 12345,
+              "type": "Formal"
+            }
+    """
+    try:
+        input_data = json.loads(action_input)
+        competition_id = input_data["competition_id"]
+        season_id = input_data["season_id"]
+        match_id = input_data["match_id"]
+        type_ = input_data["type"]
+
+        goals = convert_to_text_list(match_goals(match_id))
+        assistencies = convert_to_text_list(match_assitencies(match_id))
+        on_target_shots = convert_to_text_list(shots_on_target(match_id))
+        game_cards = convert_to_text_list(cards(match_id))
+        substitions = convert_to_text_list(substitutions(match_id))
+        match_details = convert_to_text_list(get_match_details(competition_id, season_id, match_id))
+        lineups = convert_to_text_list(starting_lineups(match_id))
+
+        prompt = f"""
+        ## Context
+        You are a {type_} soccer commentator covering a soccer match.
+        You have been tasked with commenting on the game.
+
+        ## Instructions
+        Provide, in Portuguese of Brazil, a narrative of the match including the match details,  
+        the lineups, goals, assistencies, shots on target, game cards, and substitutions.
+
+        Use the following information:
+        match details: {match_details}
+        lineups: {lineups} 
+        goals: {goals}
+        assistencies: {assistencies}
+        shots on target: {on_target_shots}
+        game cards: {game_cards}
+        substitutions: {substitions}
+
+        Provide the expert commentary on the match as if you were on a sports broadcast.
+        """
+        
+        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+        model = genai.GenerativeModel("gemini-1.5-pro")
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+
+
+# @tool
+# def get_specialist_comments(action_input:str) -> str:
+#     """
+#     Provide an overview of the match and the match details.
+#     Provide comments of a sports specialist about a specific match.
+#     The specialist knows match details and lineups.
+    
+#     Args:
+#         - action_input(str): The input data containing the competition_id, season_id, match_id and type.
+#           format: {
+#               "competition_id": 123,
+#               "season_id": 02,
+#               "match_id": 12345
+#               "type": "Formal"
+#             }
+#     """
+#     #return commentator(action_input)
+#     comments = commentator(competition_id, season_id, match_id, type)
+#     return comments

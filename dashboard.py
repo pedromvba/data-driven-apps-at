@@ -7,6 +7,13 @@ from statsbombpy import sb
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+from langchain_community.chat_message_histories import StreamlitChatMessageHistory
+from langchain.memory import ConversationBufferMemory
+from langchain_community.chat_message_histories import StreamlitChatMessageHistory
+from langchain.schema import AIMessage, HumanMessage
+from services.agent import load_agent
+
+
 
 if 'match_id' not in st.session_state:
     st.session_state.match_id = None
@@ -14,6 +21,17 @@ if 'competition_id' not in st.session_state:
     st.session_state.competition_id = None
 if 'season_id' not in st.session_state:
     st.session_state.season_id = None
+
+msgs = StreamlitChatMessageHistory()
+if "memory" not in st.session_state:
+    st.session_state["memory"] = ConversationBufferMemory(messages=msgs, memory_key="chat_history", return_messages=True)
+memory = st.session_state.memory
+
+def memorize_message():
+    user_input = st.session_state["user_input"]
+    st.session_state["memory"].chat_memory.add_message(HumanMessage(content=user_input))
+
+
 
 tab1, tab2, tab3 = st.tabs(['Partidas', 'Narração', 'ChatBot'])
 
@@ -43,7 +61,7 @@ with tab1:
     st.write(f"**Competição Selecionada:** {competition_name}")
     st.write(f"**Temporada Selecionada:** {season_selected}")
 
-    matches = get_match_details(competition_id, season_id)
+    matches = get_matches(competition_id, season_id)
     match_id = st.selectbox('Id do Jogo', matches['match_id'])
     
     st.session_state.match_id = match_id
@@ -77,3 +95,62 @@ with tab2:
 with tab3:
 
     st.title('ChatBot')
+
+    with st.container(border=False):
+        st.chat_input(key="user_input", on_submit=memorize_message) 
+        if user_input := st.session_state.user_input:
+            chat_history = st.session_state["memory"].chat_memory.messages
+            for msg in chat_history:
+                if isinstance(msg, HumanMessage):
+                    with st.chat_message("user"):
+                        st.write(f"{msg.content}")
+                elif isinstance(msg, AIMessage):
+                    with st.chat_message("assistant"):
+                        st.write(f"{msg.content}")
+                        
+            with st.spinner("Agent is responding..."):
+                try:
+                    # Load agent
+                    agent = load_agent()
+                    
+                    # Cache tools to avoid redundant calls
+                    tools = [           
+                    retrieve_match_details,
+                    get_specialist_comments
+                    ]
+                    tool_names = [tool.name for tool in tools]
+                    tool_descriptions = [tool.description for tool in tools]
+
+                    # Prepare input for the agent
+                    input_data = {
+                        "match_id": st.session_state.match_id,
+                        "input": user_input,
+                        "agent_scratchpad": "",
+                        "competition_id": int(st.session_state.competition_id),
+                        "season_id": int(st.session_state.season_id),
+                        "tool_names": tool_names,
+                        "tools": tool_descriptions,
+                    }
+
+                    # Invoke agent
+                    response = agent.invoke(input=input_data, handle_parsing_errors=True)
+
+                    # Validate response
+                    if isinstance(response, dict) and "output" in response:
+                        output = response.get("output")
+                    else:
+                        output = "Sorry, I couldn't understand your request. Please try again."
+
+                    # Add response to chat memory
+                    st.session_state["memory"].chat_memory.add_message(AIMessage(content=output))
+
+                    # Display response in chat
+                    with st.chat_message("assistant"):
+                        st.write(output)
+
+                except Exception as e:
+                    # Handle and display errors gracefully
+                    st.error(f"Error during agent execution: {str(e)}")
+                    st.write("Ensure that your inputs and agent configuration are correct.")
+
+

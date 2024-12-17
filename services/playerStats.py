@@ -1,8 +1,17 @@
 import pandas as pd
 from statsbombpy import sb
 from services.matches import get_events
+from langchain.tools import tool
+import json
+
+
+def convert_to_text_list(df):
+    text_df = df.apply(lambda row: ', '.join([f"{col}: {row[col]}" for col in df.columns]),
+              axis=1).tolist()
+    return text_df
 
 def player_events(match_id, player_name):
+
     match_events = get_events(match_id)
     player_events = match_events[match_events['player'] == player_name]
     player_events = player_events.dropna(axis=1, how='all')
@@ -44,3 +53,44 @@ def player_events(match_id, player_name):
 
     stats['player'] = player_name
     return pd.DataFrame([stats])
+
+@tool
+def player_stats(action_input: str) -> str:
+    """
+    Provide an overview of the player statistics which is useful for the player's 
+    performance analysis or comparison.
+
+    It has the following statistics:
+    - Passes Completed
+    - Passes Attempted
+    - Shots
+    - Shots on Target
+    - Fouls Committed
+    - Fouls Won
+    - Tackles
+    - Interceptions
+    - Dribbles Successful
+    - Dribbles Attempted
+    - Goals
+
+    Args:
+    - action_input(str): The input data containing the match_id and player_name
+        format: {
+            "match_id": 123,
+            "player_name": "Cristiano Ronaldo"
+        }
+
+    Returns:
+    - A summary of the player's statistics in text format.
+    """
+    try:
+        input_data = json.loads(action_input)
+        match_id = input_data["match_id"]
+        player_name = input_data["player_name"]
+
+        stats_df = player_events(match_id, player_name)
+        return '\n'.join(convert_to_text_list(stats_df))
+    except KeyError as e:
+        return f"Missing key in input data: {e}"
+    except Exception as e:
+        return f"An error occurred: {str(e)}"
