@@ -112,6 +112,7 @@ def summarizer(match_id):
 
     goals: {goals}
     assistencies: {assistencies}
+    
     on_target_shots: {on_target_shots}
     game_cards: {game_cards}
     substitions: {substitions}
@@ -164,7 +165,7 @@ def commentator(competition_id, season_id, match_id, type=None):
     """
 
     genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-1.5-pro")
     response = model.generate_content(prompt)
     return response.text
 
@@ -251,26 +252,3 @@ def get_specialist_comments(action_input: str) -> str:
         return response.text
     except Exception as e:
         return f"Error: {str(e)}"
-
-
-
-
-# @tool
-# def get_specialist_comments(action_input:str) -> str:
-#     """
-#     Provide an overview of the match and the match details.
-#     Provide comments of a sports specialist about a specific match.
-#     The specialist knows match details and lineups.
-    
-#     Args:
-#         - action_input(str): The input data containing the competition_id, season_id, match_id and type.
-#           format: {
-#               "competition_id": 123,
-#               "season_id": 02,
-#               "match_id": 12345
-#               "type": "Formal"
-#             }
-#     """
-#     #return commentator(action_input)
-#     comments = commentator(competition_id, season_id, match_id, type)
-#     return comments
